@@ -1,22 +1,33 @@
-WITH end_station_counts AS (
-    SELECT
-	uid,
-        stop_station AS end_station,
-        COUNT(*) AS count
-    FROM wifi_session
-    GROUP BY uid, stop_station
-),
-max_counts AS (
+WITH last_trips_per_day AS (
     SELECT
         uid,
-        MAX(count) AS max_count
-    FROM end_station_counts
-    GROUP BY uid
+        stop_station,
+        stop_dttm
+    FROM wifi_session wf1
+    WHERE stop_dttm = (
+        SELECT MAX(stop_dttm)
+        FROM wifi_session wf2
+        WHERE wf1.uid = wf2.uid AND wf1.stop_dttm::date = wf2.stop_dttm::date
+    )
+    ORDER BY uid, stop_dttm
+),
+stations_count AS (
+    SELECT
+        uid,
+        stop_station,
+        COUNT(*) AS station_count
+    FROM last_trips_per_day
+    GROUP BY uid, stop_station
 )
 SELECT
-    e.uid,
-    e.end_station AS most_frequent_end_station
-FROM end_station_counts e
-JOIN max_counts m
-ON e.uid = m.uid AND e.count = m.max_count
-ORDER BY e.uid;
+    uid,
+    stop_station,
+    MAX(station_count)
+FROM stations_count AS sc1
+WHERE station_count = (
+    SELECT MAX(station_count)
+    FROM stations_count AS sc2
+    WHERE sc1.uid = sc2.uid
+)
+GROUP BY uid, stop_station
+ORDER BY uid, stop_station;
